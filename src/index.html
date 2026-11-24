@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Star Board v1.0.0 — GitHub / Linear / Notion 实时研发看板</title>
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="title-group">
+      <h1>Star Board <span style="font-size:12px;font-weight:550;color:var(--ink-muted);margin-left:4px;">v1.0.0</span></h1>
+      <span class="live-pill is-loading" id="syncBadge">
+        <span class="live-dot"></span>
+        <span id="syncText">正在同步 GitHub、Linear 与 Notion 实时数据…</span>
+      </span>
+    </div>
+    <div class="header-actions">
+      <div class="view-switch" role="group" aria-label="视图切换">
+        <button class="view-btn" id="btnViewTable" aria-pressed="true" type="button">表格</button>
+        <button class="view-btn" id="btnViewBoard" aria-pressed="false" type="button">看板</button>
+        <button class="view-btn" id="btnViewProjects" aria-pressed="false" type="button">项目与仓库</button>
+      </div>
+      <button class="btn-primary" id="btnNewTask" type="button" title="快捷键 N">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.1" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>
+        <span>新建任务</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="error-banner" id="errorBanner"></div>
+
+  <section class="command-strip" aria-label="项目概览与智能分析">
+    <div class="metric-bar" id="metricBar"></div>
+    <div class="ai-pulse">
+      <span class="ai-tag">AI 今日重点</span>
+      <div class="ai-text" id="aiSummaryText">正在拉取 GitHub、Linear 与 Notion 实时条目并提炼优先建议…</div>
+    </div>
+  </section>
+
+  <section class="toolbar" id="filterToolbar" aria-label="筛选与搜索">
+    <div class="toolbar-left">
+      <div class="search-wrap">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="7" cy="7" r="4.8"/><path d="M10.8 10.8L14 14"/></svg>
+        <input class="search-input" id="searchInput" type="search" placeholder="搜索编号、标题、项目或仓库…" />
+      </div>
+
+      <div class="source-pills" id="sourcePills" role="group" aria-label="按工具来源筛选"></div>
+
+      <select class="filter-select" id="statusFilter" aria-label="按状态筛选">
+        <option value="all">全部状态</option>
+        <option value="in_review">评审中 / 待审 PR</option>
+        <option value="in_progress">进行中 / Draft PR</option>
+        <option value="todo">待办</option>
+        <option value="paused">暂缓 / Backlog</option>
+        <option value="done">已完成 / 已关闭</option>
+        <option value="canceled">已取消</option>
+      </select>
+
+      <select class="filter-select" id="priorityFilter" aria-label="按优先级筛选">
+        <option value="all">全部优先级</option>
+        <option value="urgent">紧急</option>
+        <option value="high">重要 / 高</option>
+        <option value="medium">中</option>
+        <option value="low">低 / 不重要</option>
+        <option value="none">未设优先级</option>
+      </select>
+
+      <select class="filter-select" id="scopeFilter" aria-label="按仓库、项目或分类筛选">
+        <option value="all">全部仓库 / 项目 / 分类</option>
+      </select>
+
+      <label class="toggle-check">
+        <input type="checkbox" id="chkHideClosed" />
+        <span>隐藏已完成与取消</span>
+      </label>
+    </div>
+
+    <div class="toolbar-right">
+      <span id="resultCount">加载中…</span>
+      <button class="clear-filters" id="btnClearFilters" type="button" style="display:none;">清除筛选</button>
+    </div>
+  </section>
+
+  <main id="mainContainer">
+    <div class="table-shell"><div class="empty-state"><p>正在向 GitHub、Linear 与 Notion 拉取最新数据…</p></div></div>
+  </main>
+
+  <footer class="mcp-strip">
+    <div class="mcp-connectors">
+      <span class="conn-tag" id="tagGithub"></span>
+      <span class="conn-tag" id="tagLinear"></span>
+      <span class="conn-tag" id="tagNotion"></span>
+    </div>
+    <span class="mcp-note">看板拖拽或表格/抽屉改状态均直接同步回原工具；个人备注仅保存在本机。</span>
+  </footer>
+</div>
+
+<div class="drawer-backdrop" id="drawerBackdrop"></div>
+<aside class="drawer" id="detailDrawer" aria-label="条目详情">
+  <div class="drawer-header">
+    <div id="drawerIdWrap"></div>
+    <button class="btn-ghost" id="btnCloseDrawer" type="button">关闭</button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+  <div class="drawer-footer">
+    <a id="drawerExternalLink" href="#" target="_blank" rel="noopener noreferrer">在原工具中打开</a>
+    <span class="time-cell" id="drawerSavedHint">本地备注自动保存</span>
+  </div>
+</aside>
+
+<div class="modal-wrap" id="createModalWrap" role="dialog" aria-modal="true" aria-labelledby="createModalTitle">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="createModalTitle">新建任务并同步</h2>
+      <button class="btn-ghost" id="btnCloseCreateModal" type="button">关闭</button>
+    </div>
+    <form class="modal-form" id="createTaskForm">
+      <div class="modal-body">
+        <div class="ai-quick-box">
+          <div class="ai-quick-head">
+            <span class="ai-quick-label">AI 一句话速记</span>
+            <span class="ai-quick-hint">自动识别平台、项目/分类、优先级与日期</span>
+          </div>
+          <div class="ai-quick-row">
+            <input class="ai-quick-input" id="aiQuickInput" type="text" placeholder="例如：周五前完成登录接口联调与回归测试，紧急" />
+            <button class="btn-ai-parse" id="btnAiParse" type="button">智能解析</button>
+          </div>
+          <div class="ai-parse-feedback" id="aiParseFeedback"></div>
+        </div>
+
+        <div>
+          <span class="field-label">目标平台</span>
+          <div class="platform-switch" role="group" aria-label="选择目标平台">
+            <button type="button" class="platform-opt" id="btnTargetLinear" aria-pressed="true">
+              <span class="platform-opt-main">
+                <span class="src-icon" id="targetLinearIcon"></span>
+                <span>Linear</span>
+              </span>
+              <span class="platform-opt-sub" id="targetLinearSub">研发 / 项目</span>
+            </button>
+            <button type="button" class="platform-opt" id="btnTargetNotion" aria-pressed="false">
+              <span class="platform-opt-main">
+                <span class="src-icon" id="targetNotionIcon"></span>
+                <span>Notion</span>
+              </span>
+              <span class="platform-opt-sub" id="targetNotionSub">个人 / AI工程</span>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="field-label" for="cfTitle">任务标题 *</label>
+          <input class="field-control" id="cfTitle" type="text" required placeholder="输入简洁明确的任务标题" />
+        </div>
+
+        <!-- Linear Specific Fields -->
+        <div id="linearFieldsGroup" style="display:flex;flex-direction:column;gap:10px;">
+          <div class="form-row-2">
+            <div>
+              <label class="field-label" for="cfLinearTeam">所属团队</label>
+              <select class="field-control" id="cfLinearTeam">
+                <option value="Engineering">Engineering</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label" for="cfLinearProject">所属项目</label>
+              <select class="field-control" id="cfLinearProject">
+                <option value="">暂不关联项目</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row-3">
+            <div>
+              <label class="field-label" for="cfLinearState">初始状态</label>
+              <select class="field-control" id="cfLinearState">
+                <option value="todo">Todo</option>
+                <option value="in_progress">In Progress</option>
+                <option value="in_review">In Review</option>
+                <option value="paused">Backlog</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label" for="cfLinearPriority">优先级</label>
+              <select class="field-control" id="cfLinearPriority">
+                <option value="none">未设</option>
+                <option value="urgent">紧急</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label" for="cfLinearDue">截止日期</label>
+              <input class="field-control" id="cfLinearDue" type="date" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Notion Specific Fields -->
+        <div id="notionFieldsGroup" style="display:none;flex-direction:column;gap:10px;">
+          <div class="form-row-2">
+            <div>
+              <label class="field-label" for="cfNotionCategory">分类</label>
+              <select class="field-control" id="cfNotionCategory">
+                <option value="">未分类</option>
+                <option value="工作">工作</option>
+                <option value="AI工程">AI工程</option>
+                <option value="学习">学习</option>
+                <option value="生活">生活</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label" for="cfNotionState">初始状态</label>
+              <select class="field-control" id="cfNotionState">
+                <option value="todo">待办</option>
+                <option value="in_progress">进行中</option>
+                <option value="paused">暂缓</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row-3">
+            <div>
+              <label class="field-label" for="cfNotionPriority">重要性</label>
+              <select class="field-control" id="cfNotionPriority">
+                <option value="none">未设</option>
+                <option value="urgent">紧急</option>
+                <option value="high">重要</option>
+                <option value="medium">中</option>
+                <option value="low">不重要</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label" for="cfNotionEnergy">能量</label>
+              <select class="field-control" id="cfNotionEnergy">
+                <option value="">未设</option>
+                <option value="高">高</option>
+                <option value="中">中</option>
+                <option value="低">低</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label" for="cfNotionDue">计划到期日</label>
+              <input class="field-control" id="cfNotionDue" type="date" />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="field-label" for="cfDesc" id="cfDescLabel">任务说明（可选）</label>
+          <textarea class="note-area" id="cfDesc" style="min-height:66px;" placeholder="补充上下文、验收标准或关联仓库说明…"></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <span class="time-cell" id="createTargetHint">将实时写入 Linear</span>
+        <div class="modal-footer-actions">
+          <button class="btn-ghost" id="btnCancelCreateModal" type="button">取消</button>
+          <button class="btn-primary" id="btnSubmitCreateTask" type="submit">创建并同步</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
+
+<script src="./config.js"></script>
+<script src="./js/state.js"></script>
+<script src="./js/sync.js"></script>
+<script src="./js/views.js"></script>
+<script src="./js/create-modal.js"></script>
+</body>
+</html>

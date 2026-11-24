@@ -1,0 +1,26 @@
+{
+  "name": "star-board",
+  "version": "1.0.0",
+  "description": "GitHub / Linear / Notion 跨平台双向同步实时研发看板（Claude Cowork Live Artifact）",
+  "private": false,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "keywords": [
+    "kanban",
+    "dashboard",
+    "github",
+    "linear",
+    "notion",
+    "mcp",
+    "claude-cowork",
+    "live-artifact"
+  ],
+  "author": "zhouStar7",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhouStar7/star-board.git"
+  }
+}
